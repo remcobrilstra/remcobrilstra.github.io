@@ -1,0 +1,178 @@
+title: JustDevOpsStuff();
+subtitle: The poetry of Bit's and Bytes.
+description: >- # this means to ignore newlines until "baseurl:"
+  The poetry of Bit's and Bytes.
+
+url: "" # the base hostname & protocol for your site, e.g. https://example.github.io
+baseurl: "" # the subpath of your site, e.g. /blog
+
+urls:
+    - text: Home
+      url: /
+    - text: Blog
+      url: /blog
+    - text: About
+      url: /about      
+    - text: Contact
+      url : /contact
+
+# Edit Author details (For multi authors check _data/authors.yml)
+
+author_logo: profile.png
+author: Remco Brilstra
+author_bio: Hi, my name is Remco Brilstra and i do DevOps things
+# author_email: "mail@sujaykundu.com"
+author_location: The Netherlands
+author_website_url: "https://www.remcobrilstra.com"
+typewrite-text: Welcome to my little corner of the web
+
+# Experiences
+author_work_experiences:
+            - company_name: Nederlandse Spoorwegen (Dutch Railways)
+              company_logo: companies/ns.jpg
+              company_url: https://ns.nl
+              designation: Lead platform developer
+              description: things
+              visibility: true
+            - company_name: Macaw
+              company_logo: companies/macaw.svg
+              company_url: https://macaw.nl
+              designation: Technology Consultant
+              description: Helped customers improve their software development, by using fitting tools and processes
+              visibility: true
+            - company_name: Macaw
+              company_logo: companies/macaw.svg
+              company_url: https://macaw.nl
+              designation: Software Engineer
+              description: Worked on all matters of .Net projects in azure cloud as well as on-prem. 
+              visibility: true
+
+# Education
+author_education_details:
+              - college_logo: companies/hhs.jpg
+                college_name: Haagse Hogeschool
+                college_url: https://hhs.nl
+                college_degree: Software engineering
+                description: Bachelor
+                visibility: true
+
+# Projects
+author_project_details:
+              - project_thumbnail: gamershub.png
+                project_title: Gamers Hub
+                project_description: A Platform built for Gamers and Game Devs
+                project_url: https://gamershub.in
+                visibility: true
+              - project_thumbnail: hack4r.PNG
+                project_title: Hack4r
+                project_description: A Platform built for Hackers and Penetration Testers
+                project_url: https://hack4r.com
+                visibility: true
+
+# social links
+twitter_username: remcobrilstra
+github_username:  
+facebook_username: 
+linkedin_username: remcobrilstra
+behance_username: 
+instagram_username: 
+medium_username: 
+telegram_username: 
+dribbble_username: 
+flickr_username: 
+
+#for comments ( we got Disqus and Hyvor Commenting, uncomment the one you want to use )
+
+# disqus_shortname: sujay-kundu
+# hyvor_talk_website_id: 476
+
+# wakatime username (coding activity)
+# wakatime_username: sujaykundu777
+
+# mailchimp embedded form url (newsletter):
+# mailchimp_form_url: https://sujaykundu.us10.list-manage.com/subscribe/post?u=50bab1c85eae24ecfb0f68361&amp;id=3a2dd721d0
+
+# formspree (contact form)
+# formspree_email: johndoe@gmail.com
+
+# syntax highlighter
+markdown: kramdown
+highlighter: rouge
+permalink: pretty
+
+# Choose what to show ( can be true or false)
+show_author_work_experiences: true
+show_author_education_details: true
+show_author_project_details: false
+
+# pagination of posts
+paginate: 4
+per_page: 6
+paginate_path: "/blog/page/:num/"
+
+# minify
+# compress_html:
+#   clippings: all
+#   comments: ["<!-- ", " -->"]
+#   endings: all
+#   ignore:
+#     envs: ['development']
+
+# Archives
+# jekyll-archives:
+#   enabled:
+#     - categories
+#   layout: archive
+#   permalinks:
+#     category: '/category/:name/'
+
+collections:
+  products:
+    output: true
+  authors:
+    output: true
+
+defaults:
+  -
+    scope:
+      path: "gallery"
+    values:
+      permalink: /:path/:basename:output_ext
+  -
+    scope:
+      path: ""
+      type: authors
+    values:
+      layout: author
+      permalink: /blog/authors/:slug
+
+# Build settings
+plugins:
+  - jekyll-paginate
+  - jekyll-gist
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-menus
+
+
+# Exclude from processing.
+# The following items will not be processed, by default.
+# Any item listed under the `exclude:` key here will be automatically added to
+# the internal "default list".
+#
+# Excluded items can be processed by explicitly listing the directories or
+# their entries' file path in the `include:` list.
+#
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
+destination: ./build
