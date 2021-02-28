@@ -1,0 +1,948 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>JustDevOpsStuff();</title>
+    <description>The poetry of Bit's and Bytes.</description>
+    <link>/</link>
+    <atom:link href="/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Sun, 28 Feb 2021 20:38:49 +0000</pubDate>
+    <lastBuildDate>Sun, 28 Feb 2021 20:38:49 +0000</lastBuildDate>
+    <generator>Jekyll v4.2.0</generator>
+
+    
+      <item>
+        <title>New Job, New Blog</title>
+        <description>&lt;p&gt;I migrated my blog to Azure!&lt;/p&gt;
+
+&lt;p&gt;I know it’s still a bit empty here, i’ll be migrating some of my old posts soon.&lt;/p&gt;
+
+&lt;p&gt;The cool thing (i think) is that this site is being hosted on azure as a static website, deployed via Azure pipelines from Github &lt;strong&gt;#eatyourowndogfood&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;I’ll be posting about the setup soon, just wanted to leave a note about the change here :)&lt;/p&gt;
+</description>
+        <pubDate>Sun, 28 Feb 2021 20:05:23 +0000</pubDate>
+        <link>/blog/new-blog/</link>
+        <guid isPermaLink="true">/blog/new-blog/</guid>
+      </item>
+    
+      <item>
+        <title>Securing Azure webapps with Lets Encrypt using ARM</title>
+        <description>&lt;p&gt;Let’s Encrypt offers a free and easy way to get SSL certificates for your website, in this blog post we’ll look at settings this up for an Azure App Service using ARM.&lt;/p&gt;
+
+&lt;p&gt;Just a note before we start: This is by no means something new, but it has been very useful for me over time so i thought i might be nice to share :)&lt;/p&gt;
+
+&lt;h2 id=&quot;about-lets-encrypt&quot;&gt;About Let’s Encrypt&lt;/h2&gt;
+&lt;p&gt;You may have heard of Let’s Encrypt. It’s a certificate authority that provides SSL certificates completely free! This is done with the goal of securing the internet and is backed by some major players in the tech industry.
+For more information about Let’s Encrypt have a look at their &lt;a href=&quot;https://letsencrypt.org/&quot; target=&quot;_blank&quot;&gt;website&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;In a time when providing your website over SSL an effectively a defacto standard, this is very welcome.&lt;/p&gt;
+
+&lt;p&gt;There are some things to take notice of when using certificates from Let’s Encrypt. The most important thing is that the certificates they provide are only valid for a short period (90 days) [&lt;a href=&quot;https://letsencrypt.org/2015/11/09/why-90-days.html&quot; target=&quot;_blank&quot;&gt;I leave it to them to explain why&lt;/a&gt;].&lt;/p&gt;
+
+&lt;p&gt;As it is not very workable to manually refresh your certificates every time they expire, Let’s Encrypt promotes an automated way of refreshing them. 
+The does require some logic to get working which some hosting providers actually handle for you.&lt;/p&gt;
+
+&lt;h2 id=&quot;lets-encrypt-on-azure&quot;&gt;Let’s Encrypt on Azure&lt;/h2&gt;
+
+&lt;p&gt;In order to user Let’s Encrypt certificates on an Azure App Service, there is a very nice site extension that implements all the refreshing logic for you (do note that this extension is not provided by Let’s encrypt themselves). However this does require some manual work to set up. Therefor we will look at how to set this all up using ARM-templates, so we never have to think about this stuff again.&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;If you are interested in setting Let’s Encrypt up ‘by hand’, Scott Hanselmann wrote a blog post about this a while ago that you might find interesting. Check it out &lt;a href=&quot;https://www.hanselman.com/blog/SecuringAnAzureAppServiceWebsiteUnderSSLInMinutesWithLetsEncrypt.aspx&quot; target=&quot;_blank&quot;&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;getting-started-with-arm&quot;&gt;Getting started with ARM&lt;/h2&gt;
+&lt;p&gt;Now we will be using the before mentioned Site extension, however we will initialize it using ARM. This allows us all the advantages of ARM and an easy way to get our site up and running securely.&lt;/p&gt;
+
+&lt;p&gt;I do assume some knowledge of ARM templates, if however something is unclear please hit me up in the comments and I’ll be happy to elaborate.&lt;/p&gt;
+
+&lt;h2 id=&quot;gathering-some-data&quot;&gt;Gathering some data&lt;/h2&gt;
+&lt;p&gt;To get the site extension to work we need to fill out some parameters during creation of the resource.
+As the Site Extension needs to be able to replace the certificate used by the website as well as keep track of some data, it needs a Service Principle to gain access to the Azure resources.&lt;/p&gt;
+
+&lt;p&gt;To get started go to &lt;a href=&quot;https://portal.azure.com&quot;&gt;portal.azure.com&lt;/a&gt;, find your favorite directory and find &lt;em&gt;‘Azure Active Directory’&lt;/em&gt; in the Left-hand menu.
+Then click &lt;em&gt;‘App registrations’&lt;/em&gt; as shown below.
+&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-AD-App-Registrations.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;In the following View click &lt;em&gt;’+ New application registration’&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;In the following screen fill in the data requested, make the &lt;em&gt;name&lt;/em&gt; something descriptive so it will make sense that this user has certain permissions.
+The &lt;em&gt;‘Sign-on URL’&lt;/em&gt; is required but not used in this use case, so any valid web address will do.
+&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-AD-create-app-reg.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Click &lt;em&gt;Create&lt;/em&gt; when you are done.&lt;/p&gt;
+
+&lt;p&gt;On the next screen grab the GUID that is displayed under &lt;em&gt;‘Application ID’&lt;/em&gt; this is our &lt;strong&gt;ClientID&lt;/strong&gt;
+&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-AD-create-app-reg-2.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Now click settings and then Keys.&lt;/p&gt;
+
+&lt;p&gt;In the following screen Fill in a descriptive name for the key and click save
+&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-AD-create-app-reg-3.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Make sure you get the key that is displayed after clicking save, as it is only displayed once.
+This key will be our &lt;strong&gt;ClientSecret&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Now go back to the &lt;em&gt;Azure Active Directory&lt;/em&gt; blade and click &lt;em&gt;properties&lt;/em&gt;
+&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-AD-tenantid.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Get the GUID that is displayed under &lt;em&gt;Directory ID&lt;/em&gt; this is our &lt;strong&gt;TenantID&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;We have now retrieved all the information we need, to finish up we need to set some permissions for our freshly created service principle.
+To do this go to the resource group that will contain your website (or create one if you don’t have it yet).&lt;/p&gt;
+
+&lt;p&gt;Click &lt;em&gt;Access control (IAM)&lt;/em&gt; then &lt;em&gt;Add&lt;/em&gt; and &lt;em&gt;Add role assignment&lt;/em&gt;
+&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-RG-assign-role.jpg&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;In the following screen Select the &lt;em&gt;Contributor&lt;/em&gt; role and find the service priniciple we just created.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/secure-azure-webapp-with-letsencrypt-using-arm/Azure-RG-assign-role-2.jpg&quot; alt=&quot;&quot; /&gt;
+Select the Service Principle and hit &lt;em&gt;Save&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;We’re now done for the azure part, just one more piece of preparation.&lt;/p&gt;
+
+&lt;h2 id=&quot;pointing-your-dns-the-right-way&quot;&gt;Pointing your dns the right way&lt;/h2&gt;
+&lt;p&gt;To assign a custom hostname to a webapp within Azure, you need to make sure that the chosen url is pointing (CNAME) to the default azure url of the new website. Azure validates this and will only assign the hostname if the dns entry is found (this te prevent abuse). There are two ways to pass the Azure dns validation which are the following :&lt;/p&gt;
+
+&lt;p&gt;Direct DNS entry, you create a CNAME entry for your new hostname and point it to directly to the new resource url.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;test  CNAME  {sitename}.azurewebsites.net.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;In this case i would be connecting ie. test.remcobrilstra.com to the new web app.&lt;/p&gt;
+
+&lt;p&gt;A DNS Validation entry, this option creates a separate DNS entry that CNAME’s from a derived domain to a derived domain.
+This entry will solely be used to validate your ownership of the domain, but will not route any traffic over url you will be using, this is especially useful when your are migrating a website that is already receiving live traffic.
+The entry would look something like this:&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;awverify.test CNAME awverify.{sitename}.azurewebsites.net.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;The above entry would also validate the test.remcobrilstra.com connection as far as azure is concerned. Once you go live with this site, you will still have to add/update first entry to make sure people will actually end up on the new site.&lt;/p&gt;
+
+&lt;h2 id=&quot;the-resources&quot;&gt;The resources&lt;/h2&gt;
+
+&lt;p&gt;So above we prepared some resources to get our ARM on, now you might be wondering what are we doing ARM?&lt;/p&gt;
+
+&lt;p&gt;We will be provisioning a few resources that are required to properly run the Let’s Encrypt extension, these are:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;App service plan&lt;/strong&gt;&lt;br /&gt;
+As you may know a web app is hosted in a App service plan, you are free to add multiple Web App to it if you want (these can also use the Let’s encrypt functionality as long as they have the required parameters set). An important note about the App service plan is that we’ll be hosting it in the ‘S1’ size, anything bigger than this will also do, but we need to SSL and custom domain features provided from this size and up.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Storage Account&lt;/strong&gt;&lt;br /&gt;
+We as creating a storage account for the Let’s Encrypt extension, this storage account is used to store the certificate as well as some information the scheduled cert update task uses to function properly.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Web App&lt;/strong&gt;&lt;br /&gt;
+The web app we’ll be binding the custom domain and SSL certificate to need to be created as well.
+This resource comes with some additional (child) resources to make sure the site extension works properly&lt;/p&gt;
+
+    &lt;ul&gt;
+      &lt;li&gt;&lt;strong&gt;App settings&lt;/strong&gt;&lt;br /&gt;
+This resource contains the app/environment settings that will be passed to the web app, these settings contain all the configuration the extension requires.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Web&lt;/strong&gt;&lt;br /&gt;
+This resource allows us to set some generic properties on the web app, in this case we’re using it to set the ‘always on’ setting to true.
+By doing so we’ll make sure the website doesn’t go to sleep in times of inactivity, if this where to happen at the moment the certificate needs refreshing the job will fail and your site will be left with an invalid SSL certificate.
+Although the damage is limited, once it expires the first request to the site will wake it up and get a security error, due to the fact the site woke up the SSL certificate will be updated pretty much immediately. Buy you will still have had a visitor that ran into that error, which isn’t nice. So we’ll just add it to be safe.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Site extension&lt;/strong&gt;&lt;br /&gt;
+The actual site extension is denoted as resource here as well, although important the configuration is all passed through the app settings so it doesn’t really contain anything noteworthy.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;HostBinding&lt;/strong&gt;&lt;br /&gt;
+This resource contains the custom hostname that will be bound to the web app.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;the-parameters&quot;&gt;The parameters&lt;/h2&gt;
+&lt;p&gt;The ARM template that I use can be found below, but before you start using the template it might be useful to shortly run through the parameters.
+I’ll only focus on the ones that you really need to provide yourself, feel free to dive in a bit more if you want to start using this.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;customHostname&lt;/strong&gt;&lt;br /&gt;
+This one is pretty self explanatory, it contains the hostname that you want your web app to start using.
+This should be set to the same value as you used to set up the DNS entry.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;LetsEncrypt_tenant&lt;/strong&gt;&lt;br /&gt;
+This parameter contains the &lt;strong&gt;TendantId&lt;/strong&gt; that we retrieved earlier&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;LetsEncrypt_clientId&lt;/strong&gt;&lt;br /&gt;
+This parameter contains the &lt;strong&gt;clientID&lt;/strong&gt; that we retrieved earlier&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;LetsEncrypt_clientSecret&lt;/strong&gt;&lt;br /&gt;
+This parameter contains the &lt;strong&gt;clientSecret&lt;/strong&gt; that we retrieved earlier&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;LetsEncrypt_email&lt;/strong&gt;&lt;br /&gt;
+Lets Encrypt requires an e-mail address when requesting a certificate, this e-mail address will be used to inform you if your certificates are expiring.
+This will only occur if the refresh logic of the extension somehow doesn’t work correctly. If however you are not interested in these messages, Let’s Encrypt also allows you to unsubscribe from these messages.
+Your Unsubscribe will however only last for a year after that you will have to re-do it.
+I’d advise against it though as these messages only pop-up when something goes wrong with the refresh and you probably want to know that.&lt;/p&gt;
+
+&lt;h2 id=&quot;some-actual-arm&quot;&gt;Some actual ARM&lt;/h2&gt;
+
+&lt;p&gt;Below you’ll find a functioning ARM template that will allow you to deploy a website wit the Let’s Encrypt integration installed.&lt;/p&gt;
+
+&lt;p&gt;I tried to keep the template as minimal as possible to avoid confusion, for production use I’d probably set a bit more properties on the web app.&lt;/p&gt;
+
+&lt;div class=&quot;language-json highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;$schema&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;contentVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.0.0.0&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;parameters&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;skuName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;S1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;allowedValues&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;S1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;S2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;S3&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;P1&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;P2&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;P3&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;P4&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;metadata&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;description&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Describes plan's pricing tier and instance size. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;skuCapacity&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;int&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;minValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;metadata&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;description&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Describes plan's instance count&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;customHostname&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsecryptstorageType&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Standard_LRS&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;allowedValues&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Standard_LRS&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Standard_ZRS&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Standard_GRS&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Standard_RAGRS&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Premium_LRS&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_tenant&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_clientId&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_clientSecret&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_email&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_authenticationEndpoint&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;metadata&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;description&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;The authenticaion endpoint/azure active directory authority used in the selected azure region, when unset it defaults to https://login.windows.net/&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_tokenAudience&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;metadata&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;description&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;The token audience/resourceId used in the selected azure region, when unset it defaults to https://management.core.windows.net/&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_managementEndpoint&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;metadata&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;description&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;The Azure ARM management endpoint used in the selected azure region, when unset it defaults to https://management.azure.com&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;LetsEncrypt_webSitesDefaultDomainName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;string&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;defaultValue&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;metadata&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;description&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;The default azure web app domain name used in the selected azure region, when unset it defaults to azurewebsites.net&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;variables&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;appServicePlan&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[concat('my-appserv-plan-', uniqueString(resourceGroup().id))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;webSiteName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[concat('my-website-', uniqueString(resourceGroup().id))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsecryptstorageName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[concat('myencrstore', uniqueString(resourceGroup().id))]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;resources&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2015-08-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[variables('appServicePlan')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Microsoft.Web/serverfarms&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;location&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceGroup().location]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;HostingPlan&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;sku&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('skuName')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;capacity&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('skuCapacity')]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;properties&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[variables('appServicePlan')]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2015-08-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[variables('webSiteName')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Microsoft.Web/sites&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;location&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceGroup().location]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/serverFarms/', variables('appServicePlan'))]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;[concat('hidden-related:', resourceGroup().id, '/providers/Microsoft.Web/serverfarms/', variables('appServicePlan'))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;empty&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Website&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;properties&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[variables('webSiteName')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;serverFarmId&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/serverfarms', variables('appServicePlan'))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;phpVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;pythonVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;nodeVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;use32BitWorkerProcess&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;webSocketsEnabled&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;alwaysOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;http20Enabled&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;minTlsVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;1.2&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;resources&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2015-08-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;connectionstrings&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/Sites/', variables('webSiteName'))]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;properties&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;AzureWebJobsStorage&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+              &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;value&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[Concat('DefaultEndpointsProtocol=https;AccountName=',variables('letsecryptstorageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('letsecryptstorageName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+              &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Custom&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;AzureWebJobsDashboard&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+              &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;value&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[Concat('DefaultEndpointsProtocol=https;AccountName=',variables('letsecryptstorageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('letsecryptstorageName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+              &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Custom&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;web&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2015-08-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/sites', variables('webSiteName'))]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;web&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;properties&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;alwaysOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;kc&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;appsettings&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;config&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2015-08-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/sites', variables('webSiteName'))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Storage/storageAccounts', variables('letsecryptstorageName'))]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;appsettings&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;properties&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:Hostnames&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('customHostname')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:Email&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_email')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:AcmeBaseUri&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;https://acme-v01.api.letsencrypt.org/&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:SubscriptionId&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[subscription().subscriptionId]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:Tenant&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_tenant')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:ClientId&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_clientId')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:ClientSecret&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_clientSecret')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:ResourceGroupName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceGroup().name]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:UseIPBasedSSL&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;false&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:AzureAuthenticationEndpoint&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_authenticationEndpoint')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:AzureTokenAudience&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_tokenAudience')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:AzureManagementEndpoint&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_managementEndpoint')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;letsencrypt:AzureDefaultWebSiteDomainName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('LetsEncrypt_webSitesDefaultDomainName')]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2015-08-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;letsencrypt&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;siteextensions&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/Sites', variables('webSiteName'))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/Sites/config', variables('webSiteName'), 'appsettings')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+            &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceId('Microsoft.Web/Sites/config', variables('webSiteName'), 'connectionstrings')]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+          &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Microsoft.Web/sites/hostnameBindings&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[concat(variables('webSiteName'), '/', parameters('customHostname'))]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2016-03-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;location&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceGroup().location]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;properties&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[concat('Microsoft.Web/sites/',variables('webSiteName'))]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[variables('letsecryptstorageName')]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;type&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Microsoft.Storage/storageAccounts&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;location&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[resourceGroup().location]&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;apiVersion&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;2016-01-01&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;sku&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;name&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;[parameters('letsecryptstorageType')]&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;dependsOn&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[],&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+        &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;letsecryptstorage&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;},&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+      &lt;/span&gt;&lt;span class=&quot;nl&quot;&gt;&quot;kind&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;:&lt;/span&gt;&lt;span class=&quot;w&quot;&gt; &lt;/span&gt;&lt;span class=&quot;s2&quot;&gt;&quot;Storage&quot;&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+    &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+  &lt;/span&gt;&lt;span class=&quot;p&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;w&quot;&gt;
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;This should get you started with the ARM template, i’ve been using a template based on this for everything i deploy.
+It’s just a breeze and really nice to no longer have to worry about certificates on any of my websites.&lt;/p&gt;
+
+&lt;p&gt;If you have any comments let me know!&lt;/p&gt;
+</description>
+        <pubDate>Sun, 17 Feb 2019 20:05:23 +0000</pubDate>
+        <link>/blog/secure-azure-webapp-with-letsencrypt-using-arm/</link>
+        <guid isPermaLink="true">/blog/secure-azure-webapp-with-letsencrypt-using-arm/</guid>
+      </item>
+    
+      <item>
+        <title>Azure Devops for Github Projects</title>
+        <description>&lt;p&gt;Microsoft announced the rebranding of VSTS to Azure DevOps and with it an offering for OSS projects and better GitHub integration, making Azure DevOps a very interesting option for OSS projects. In this post I’ll go detail the process of getting started with Azure DevOps CI for a GitHub project.&lt;/p&gt;
+
+&lt;h2 id=&quot;vsts-is-dead-long-life-azure-devops&quot;&gt;VSTS is dead, long life Azure DevOps&lt;/h2&gt;
+&lt;p&gt;Earlier this week Microsoft announced the rebrand of VSTS (the application formerly known as Visual Studio Online) to Azure DevOps. I won’t go into details of this rebrand at this point, but I do want to focus on a particular part of the announcement, which is the extended integration into GitHub. This is especially interesting a Microsoft also announced that Azure DevOps will proved free Pipelines (CI/CD) for open source project from now on.&lt;/p&gt;
+
+&lt;h2 id=&quot;the-new-free&quot;&gt;The new Free&lt;/h2&gt;
+&lt;p&gt;VSTS also had a free offering (which still exists). However this wasn’t focused on OSS and limited the amount of minutes a project can utilize on agents hosted by Microsoft. As for the OSS variant now being offered this limit has been lifted allowing unlimited builds/deployments to be executed. Only limiting the amount of parallel jobs being executed on their clusters which shouldn’t be to much of a limitation in general.&lt;/p&gt;
+
+&lt;h2 id=&quot;so-whats-the-plan&quot;&gt;So what’s the plan?&lt;/h2&gt;
+&lt;p&gt;To get started we need a project, for this post I’ll be using a default DotNet core web application, however in the words of Donovan Brown, Azure DevOps can be used for &lt;em&gt;“Any Language, Any Platform”&lt;/em&gt;. Whatever you got cooking, chances are you are able to build and deploy it with out of the box functionality in Azure DevOps.&lt;/p&gt;
+
+&lt;p&gt;For the purposes of this blog post I’ll go through the process of setting up a GitHub project/repo as well as a DotNet core application and pushing to latter to the former. If this is clear cut for you just skip to the &lt;em&gt;‘Doing the Azure DevOps thing’&lt;/em&gt; section.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;NOTE:&lt;/strong&gt; I ran into some things that are currently still ‘sub-optimal’ which I elaborate on in the section &lt;em&gt;‘It ain’t all sunshine and unicorns’&lt;/em&gt; if you indent to run through this guide for more then just fun and games I’d advice to read that before you continue te prevent you running into any issues.&lt;/p&gt;
+
+&lt;h2 id=&quot;setting-up-a-simple-project-on-github&quot;&gt;Setting up a Simple project on GitHub&lt;/h2&gt;
+&lt;p&gt;As I  stated I’ll be starting from scratch today, although you should be able to get start with any existing project you have laying around just as well. So to get started lets get a project up and running.&lt;/p&gt;
+
+&lt;h2 id=&quot;creating-a-simple-dotnet-core-project&quot;&gt;Creating a Simple DotNet core project&lt;/h2&gt;
+&lt;p&gt;For this exercise I’ll be creating an ‘ASP.NET Core Web Application’ using Visual Studio.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/VisualStudio_Project_Create.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;For the further process it doesn’t really matter what options you choose in the next screen so just pick whatever you like.&lt;/p&gt;
+
+&lt;p&gt;After your project is created you will have a very basic web application that won’t do much but should suffice for our purposes.&lt;/p&gt;
+
+&lt;p&gt;Now we’ll move over to GitHub to get started.&lt;/p&gt;
+
+&lt;h2 id=&quot;creating-your-github-project&quot;&gt;Creating your GitHub project&lt;/h2&gt;
+&lt;p&gt;At this point I assume you have a GitHub account if that is not the case simply Create a new one to continue.&lt;/p&gt;
+
+&lt;p&gt;Once you login you’ll  see a ‘Create a Repository’ button, once you click that you’ll be prompted to the following screen.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_Repo_Create.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;This screen allows you name your new repository as well as populate it with some default ignore file and a license, for now we will keep it empty and continue to create the repository.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_Repo_Empty.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;CONGRATULATIONS!  You have just created your very own Git repository!&lt;/p&gt;
+
+&lt;h2 id=&quot;pushing-your-code-github&quot;&gt;Pushing your code GitHub&lt;/h2&gt;
+&lt;p&gt;In order to get our code into the newly created repo, copy the *.git url displayed on this screen and find your way back to Visual Studio.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/VisualStudio_SourceControl_Add.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;On the bottom right of your screen you will find a ‘Add to Source Control’ button, expanding that will show a ‘Git’ button. Clicking this will create a local git repo in the folder where you created your project, this will place the .SLN in the root of your repository. If you prefer this to be different this would be the time to make some organizational changes&lt;/p&gt;
+
+&lt;p&gt;After this is done the following the screen will be shown (click the ‘Publish Git Repo’ to see the textbox). In this text box copy the url of your GitHub repo an click publish.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/VisualStudio_Git_Publish.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;You will be prompted to login to your GitHub account. Once you do so a access token will be generated on your github account and the code will be pushed to the repository (&lt;strong&gt;note:&lt;/strong&gt; as this creates an access token, you will receive an e-mail from github about this activity on your account. Fear not it was you who did that )&lt;/p&gt;
+
+&lt;p&gt;As I already stated your code will now be pushed to GitHub, once this is completed go back to your browser and refresh to page. At this point you will see a nicely populated repository with your code in it.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_Repo_Filled.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Congrats you are now officially on the GitHubs, now let’s start doing what we came here for.&lt;/p&gt;
+
+&lt;h2 id=&quot;doing-the-azure-devops-thing&quot;&gt;Doing the Azure DevOps thing&lt;/h2&gt;
+
+&lt;p&gt;Now although the entire suite of tools is Called Azure DevOps, all the separate tools have been rebranded to reflect what they do (and possibly to be able to market them better) therefor what used to be Build&amp;amp;Release in VSTS is now called Azure Pipelines. Which therefor is what this integration will refer to from now on.&lt;/p&gt;
+
+&lt;p&gt;In the Top menu click ‘Marketplace’ to enter the GitHub integration marketplace, once there search for ‘Azure Pipelines’.&lt;/p&gt;
+
+&lt;p&gt;Now click the ‘Azure pipelines’ entry, to get to the details page for this Marketplace offering. On the bottom of the page you will be able to install this integration into your repository.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_AzurePipeline_Install.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Click install and confirm your order to get to the next stage of this process.&lt;/p&gt;
+
+&lt;p&gt;After doing this you will be prompted to provide Azure Pipelines with access to your repository. At this point you may opt to provide Azure Pipelines with access to all your repositories or just to the one you just created.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; providing access to all repositories will also include any repositories you may create in the future.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_AzurePipeline_Permissions.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;During this install process your are allowed to select from a list of Azure DevOps accounts you may already have, to create a new one. If however you don’t have any existing Azure DevOps accounts you may run into the same snack as I did which I describe in the last section. It might be wise to read that &lt;strong&gt;before you continue&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;If all is well you can click install run through the selection and you’ll be send to a wizard for Azure DevOps creation, at this point you will need to login with a Live account which I’ll presume you have.&lt;/p&gt;
+
+&lt;p&gt;After either selecting or creating a Azure DevOps account the installer will move into Azure DevOps/Pipelines.&lt;/p&gt;
+
+&lt;h2 id=&quot;configuring-your-azure-pipeline&quot;&gt;Configuring your Azure Pipeline&lt;/h2&gt;
+
+&lt;p&gt;This will throw you into the new YAML based pipeline wizard, for those of you already familiar with Azure DevOps you might prefer the visual editor which you will have to go to by clicking build in the side-menu an creating a new definition, You are able to work around that but for now we’ll continue with the YAML experience.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/AzureDevOps_Build_Create.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Once you select your repository you will see Azure DevOps doing some analysis on your repo, this analysis attempts to identify the type of project you have checked-in. This allows Azure Pipelines to give a few suggestions for standard templates that could build your code. You are however always able to select an empty template, or by selecting  ‘All templates’ browse all the other templates available.&lt;/p&gt;
+
+&lt;p&gt;As I created a straight forward DotNet core application the ‘ASP.NET Core’ template will fit my needs best so I’ll select that. If you are doing this with any other type of project select what applies to you.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/AzureDevOps_Build_ViewYAML.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;After selecting the template you’ll be given a preview of the YAML file that will be used which you can change on the spot if required.&lt;/p&gt;
+
+&lt;p&gt;For now we’ll keep it as is an click ‘Save and run’&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/AzureDevOps_Build_SaveAndRun.png&quot; alt=&quot;&quot; /&gt;
+This will show a dialog allowing you to either check the YAML file directly into the branch you are working in or create a separate branch and adding the file there. I’d advice using the option to create a new branch for reasons I’ll get into below.&lt;/p&gt;
+
+&lt;p&gt;Click ‘save and run’ to continue your process&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/AzureDevOps_Build_Starting.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;When you continue you will see your build process in action. Initially this may show the screen above while Azure Pipelines is looking for a build agent to process your job. This generally doesn’t take more than a few seconds.&lt;/p&gt;
+
+&lt;p&gt;While we are watching our build run, Azure DevOps did some additional work in the background. It created the branch that we instructed it to, but it also created a Pull request from the branch to your master. This pull requests has your newly created CI pipeline configured as a validation check.&lt;/p&gt;
+
+&lt;p&gt;When you switch back to GitHub you’ll notice that a pull request has been opened, for the addition of the YAML file.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_PullRequest.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;When you open the pull request you’ll see that it is actually awaiting a validation build in Azure Pipelines to validate your request. This is especially useful when you are building something a bit more complex than my sample as a failed build will hold this pull request until you have fixed the YAML file to successfully build your application and only then will this new addition be added to your master branch.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_Build_Pending.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;NOTE:&lt;/strong&gt; This will still be saying its checks haven’t completed after the build you kicked off is completed. This is due to the fact that you kicked that one off manually and the validation build for the PR will be scheduled right after that one.&lt;/p&gt;
+
+&lt;p&gt;After a short wait, you’ll see everything light up in a pleasing green.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_Build_Success.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;And you are free to Merge this PR, and start using your Azure Pipeline in the wild
+Clicking the detail of the check will show a detail view with a link to Azure Pipelines for more details on the build (&lt;strong&gt;Note:&lt;/strong&gt; there seems to be an issue with public access to that ATM please see the end of this post for details).&lt;/p&gt;
+
+&lt;p&gt;Once you merge your PR into master you will see another Azure Pipelines build popping up to validate the changes to Master.&lt;/p&gt;
+
+&lt;p&gt;At this point you are done! Yay.&lt;/p&gt;
+
+&lt;p&gt;You can now start working on your code base in github and accepting PRs without the fear of breaking the build.&lt;/p&gt;
+
+&lt;h2 id=&quot;it-aint-all-sunshine-and-unicorns&quot;&gt;It ain’t all sunshine and unicorns&lt;/h2&gt;
+&lt;p&gt;While writing this post there where a few things I notices which require some improvement in my opinion. Although that is to be expected with a product that only launched this week it’s still good to take this into account when you start using Azure Pipelines with your GitHub repository.&lt;/p&gt;
+
+&lt;h3 id=&quot;naming-of-a-new-azure-devops-project&quot;&gt;Naming of a new Azure DevOps project&lt;/h3&gt;
+&lt;p&gt;When I started this I made it a point to start from scratch (so new live-account new GitHub-account etc.) just to make sure I didn’t run into anything. In general all was oké but there was one weird thing when I went to the ‘installation wizard’. For accounts at I have used in the past (aka already have Azure DevOps accounts on their name). I was prompted to use either an existing account or provide a name for a new one, which I though was a very nice experience.&lt;/p&gt;
+
+&lt;p&gt;However when I loggedin with a brand new live account I wasn’t prompted to fill in a name, and I simply created a Azure DevOps account named {firstname}{lastname} and a project with the same name. As this wasn’t the name I wanted to use I changed both account and project name in Azure DevOps afterwards. However this caused the link in the pull request to no longer work as that still pointed to the old name of the account which no longer existed.&lt;/p&gt;
+
+&lt;p&gt;So if you are starting anew in Azure DevOps I’d advice to create a new account beforehand to make sure you don’t run into the same issue I did.&lt;/p&gt;
+
+&lt;p&gt;Although it seems like something that is pretty obviously not the intended behavior so it might get fixed soon (pretty please Microsoft).&lt;/p&gt;
+
+&lt;h3 id=&quot;pr-link-to-your-build-results&quot;&gt;PR link to your build results&lt;/h3&gt;
+&lt;p&gt;As stated in the post above the PR details show a link to Azure Pipelines that allows you to view the build results/logs in detail. As this is an OSS project everyone is able to see this, which is really useful if you are creating a PR for an project an you want to know how you managed to break the build.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/GitHub_PullRequest_Details.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;This link that get generated however isn’t currently publicly accessible, even though the project itself is.&lt;/p&gt;
+
+&lt;p&gt;The link underneath the PR data on GitHub is as follows:&lt;/p&gt;
+
+&lt;p&gt;https://dev.azure.com/JustCodeStuff/web/build.aspx?pcguid=18250f89-1973-4218-9539-38b8b2457975&amp;amp;builduri=vstfs:%2f%2f%2fBuild%2fBuild%2f5&lt;/p&gt;
+
+&lt;p&gt;Which hits a login prompt ,while the project itself under the following link is available&lt;/p&gt;
+
+&lt;p&gt;https://dev.azure.com/JustCodeStuff/JustCodeStuff.DotNetCore.Sample&lt;/p&gt;
+
+&lt;p&gt;Even the normal URL to the build details works just fine&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://dev.azure.com/JustCodeStuff/JustCodeStuff.DotNetCore.Sample/JustCodeStuff.DotNetCore.Sample%20Team/_build/resultsbuildId=5&quot;&gt;https://dev.azure.com/JustCodeStuff/JustCodeStuff.DotNetCore.Sample/
+JustCodeStuff.DotNetCore.Sample%20Team/_build/resultsbuildId=5&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;This is quite annoying but i’d expect this to be fixed soon.&lt;/p&gt;
+
+&lt;h3 id=&quot;no-visual-editor&quot;&gt;No visual Editor&lt;/h3&gt;
+&lt;p&gt;As an experienced used of VSTS/Azure DevOps I’m used to working with the Visual Editor for builds and releases. The downside of the visual editor is that it can’t be used when working with YAML files. Although I understand the added value of having the definition of your build in source-control and tend to use that a lot as well I was somewhat disappointed that there was no option from the wizard select the visual editor as an option to get started with your pipeline (@microsoft being able to use the Visual editor for YAML files wouldn’t hurt either).&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/azure-devops-for-github-projects/newpipeline.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;If you really want to use the visual editor it is still available by clicking Builds in the left menu. Once there click “new +”, this will default to the YAML editor but there is a link to ‘use the visual designer’ in the bottom.&lt;/p&gt;
+
+&lt;h2 id=&quot;in-conclusion&quot;&gt;In conclusion&lt;/h2&gt;
+&lt;p&gt;I really like the ease of integration the guys put together and I am definitely going to use this going forward. Just a few bugfixes/improvements would make it perfect!&lt;/p&gt;
+
+&lt;p&gt;If you have any questions of remarks please let me know in the comments!&lt;/p&gt;
+</description>
+        <pubDate>Thu, 13 Sep 2018 20:05:23 +0000</pubDate>
+        <link>/blog/azure-devops-for-github-projects/</link>
+        <guid isPermaLink="true">/blog/azure-devops-for-github-projects/</guid>
+      </item>
+    
+      <item>
+        <title>Working With Vsts Yaml Builds</title>
+        <description>&lt;p&gt;At the Connect(); 2017, Microsoft announced the addition of YAML based build (which I shortly covered in my connect post). Now I finally had some time to play around with this new feature. So I felt it was time go a bit more in-depth on this new system.&lt;/p&gt;
+
+&lt;p&gt;So I’ll start with an introduction into the subject and walk through getting is all up and running.&lt;/p&gt;
+
+&lt;h2 id=&quot;why-you-want-this&quot;&gt;Why you want this&lt;/h2&gt;
+&lt;p&gt;If you have some experience with build systems you will be familiar with the situation where changes in an application require changes to the build process. This is a natural effect of development of any application, but will cause some problems, especially if the changes to the build process are not backwards compatible.&lt;/p&gt;
+
+&lt;p&gt;In the past (the non-yaml times) this would mean that you would have to create different versions of your build processes for develop and masters branches. In a landscape where you have to be able to build older software versions also, you’d have to create build definition for versions of the application and somehow administrate which build definitions belong to which version of the application. This gets very complicated very fast, not to mention that all these definitions have to be maintained to some extent.&lt;/p&gt;
+
+&lt;h3 id=&quot;yaml-builds-to-the-rescue&quot;&gt;YAML builds to the rescue&lt;/h3&gt;
+&lt;p&gt;With the new YAML builds you maintain the build process of your software with the code itself. Meaning it gets checked in with the rest of your code and gets versioned as such. The beauty of this solution is that if you need to build a application version from 2 years ago, you are able to start a build of the related revision and VSTS will fetch the build definition from that point in time and execute that.&lt;/p&gt;
+
+&lt;p&gt;In the announcement this was referenced to a Pipeline As Code, referring to the similarity to Infrastructure As Code which takes a similar approach to handling Infrastructure. There are many solution for IAC, including but definitely not being limited to Azure Resource Management (ARM).&lt;/p&gt;
+
+&lt;p&gt;An added advantage (this is true for IAC as well as PAC) is that this puts the responsibility with the programmer to make sure that his/her changes are compliant with the configuration in the repository.&lt;/p&gt;
+
+&lt;p&gt;A slight disadvantage might be that this does provide yet another way to quite literally break the build, but on the upside it also allows you to fix it.&lt;/p&gt;
+
+&lt;h2 id=&quot;some-critical-notes&quot;&gt;Some critical notes&lt;/h2&gt;
+&lt;p&gt;Before we start a short ‘getting started’ guide, there are some things that do (in my humblest of opinions) require some improvement.&lt;/p&gt;
+
+&lt;h3 id=&quot;editing&quot;&gt;Editing&lt;/h3&gt;
+&lt;p&gt;Currently there is no editor available for the YAML files. YAML is of course a pretty simple format, but it isn’t always very clear what you are allowed to do. The long way around the seeing if your edit has the desired effect is committing &amp;amp; pushing your updated file and seeing if VSTS gives you any error and/or you build performs as expected. This is a pretty cumbersome process especially when setting up a new build.&lt;/p&gt;
+
+&lt;p&gt;To make this a bit less straining a ‘View YAML’ button was added to the old build definition which allows you to view the YAML for that build definition. This allows you to setup your build in the normal editing experience then export it to YAML.&lt;/p&gt;
+
+&lt;p&gt;There is however no way (as far as I know) to easily go from YAML to a editable situation. So say you want to change an existing YAML build you are left to tinker with the file or recreate the YAML build in the editor manually to then apply your change and export it to yaml again. This (especially when your builds get more complex) can be a very labor intensive and error prone operation, so I hope there will be solution of this in the future.&lt;/p&gt;
+
+&lt;h3 id=&quot;just-phases--steps&quot;&gt;Just Phases &amp;amp; Steps&lt;/h3&gt;
+&lt;p&gt;It is important to note that the YAML files (currently) only support Phases and Steps. Now there is something to say for this as this is the essence of your build process, however if your build depends on certain variables (something like ‘BuildConfiguration’ or ‘BuildPlatform’) you will have to create them in the VSTS build editor.&lt;/p&gt;
+
+&lt;p&gt;I do see that advantage of this as it allows you to create different build based on the same process using different trigger/branches or variables. On the other hand it can also cause issues if variables change during the lifetime of the software. You will have to make sure to keep changes here backwards compatible, as something like a missing variable will &lt;em&gt;‘break the build’&lt;/em&gt;.&lt;/p&gt;
+
+&lt;h3 id=&quot;yaml&quot;&gt;YAML&lt;/h3&gt;
+&lt;p&gt;This is not so much something that I except to be changed just a general wondering ‘WHY YAML?!’. An explanation for this would be that YAML is used for exactly this purpose in other popular build systems, however I would hope that there is a better argument for this then ‘but the other boys are also doing it’.&lt;/p&gt;
+
+&lt;p&gt;As builds can already be freely exported and imported in JSON it would in my opinion have been a logical choice to reuse this format. This reuse would also have removed the editing issues I stated above as the definition would be easily imported for editing. Which leads me to another possible reason for this choice, as a full export contains way more information then the YAML system currently (and possibly will ever) supports, using a different format does reduce the risk of confusion between the two file-types.&lt;/p&gt;
+
+&lt;h2 id=&quot;getting-started&quot;&gt;Getting started&lt;/h2&gt;
+&lt;p&gt;Now that we got that out of the way, lets get this show on the road.&lt;/p&gt;
+
+&lt;h3 id=&quot;enable-the-preview-feature&quot;&gt;Enable the preview feature&lt;/h3&gt;
+&lt;p&gt;As this functionality is currently still in preview, it will not be enabled by default.  To enable is click your image in the top right corner and click Preview Features. In the panel that shows up make sure to select ‘for this account’ in the drop down as this features can only be enabled for the entire VSTS instance.&lt;/p&gt;
+
+&lt;p&gt;Now find the ‘Build YAML definitions flag in turn it on.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/working-with-vsts-yaml-builds/YamlBuildFlag.png&quot; alt=&quot;alt text&quot; title=&quot;Enabling the preview feature&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Congratulations, you are ready to get started.&lt;/p&gt;
+
+&lt;h3 id=&quot;create-a-standard-build&quot;&gt;Create a standard build&lt;/h3&gt;
+&lt;p&gt;Our starting point will be a standard build, for the purposes of this demo I created a ASP.NET Core build and checked in a simple Core web project. But generally any existing build will do.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;For this example I’ll assume that you have an empty project with a core project checked into Git.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;So under &lt;strong&gt;Build and Release / Builds&lt;/strong&gt;  click the ‘+ New’ button
+&lt;img src=&quot;/assets/img/posts/working-with-vsts-yaml-builds/VSTS_build_selectagentqueu.png&quot; alt=&quot;alt text&quot; title=&quot;Selecting an agent queue&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Now click the view YAML link in the top right corner of the screen&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/working-with-vsts-yaml-builds/VSTS_View_YAML.png&quot; alt=&quot;alt text&quot; title=&quot;View YAML&quot; /&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;creating-the-yaml-build&quot;&gt;Creating the YAML build&lt;/h3&gt;
+&lt;p&gt;Now copy the YAML from the shown popup and create a file named &lt;strong&gt;.vsts-ci.yml&lt;/strong&gt; in the root of your repository. In general the name of this file can be anything you want, however VSTS monitors for this name and whenever there is no existing YAML build looking for this file any commit on the file will trigger the automatic creation of a new build definition based on that file.&lt;/p&gt;
+
+&lt;p&gt;Once you commit and push this file, you will see a build definition appearing in VSTS, as this build includes a trigger your build will also be running now.&lt;/p&gt;
+
+&lt;p&gt;Unfortunately the new build will fail ☹&lt;/p&gt;
+
+&lt;p&gt;As mentioned before variables are not included in the YAML files, however the standard builds use variables (namely like ‘BuildConfiguration’ and ‘BuildPlatform’) which are now missing from our newly created build.&lt;/p&gt;
+
+&lt;p&gt;To get things working switch to the ‘Variables’ tab and add the missing variables.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/working-with-vsts-yaml-builds/VSTS_build_set_defaultvariables.png&quot; alt=&quot;alt text&quot; title=&quot;Add default variables&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Click ‘Save &amp;amp; Queue’ and your build will start, and should succeed&lt;/p&gt;
+
+&lt;p&gt;Congrats, you just executed your very first YAML based build.&lt;/p&gt;
+
+&lt;h3 id=&quot;another-approach&quot;&gt;Another approach&lt;/h3&gt;
+&lt;p&gt;If you want to use a different name and/or create multiple build definitions based on the same YAML file, you can simply use the ‘+ new’ button and select the YAML template.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/working-with-vsts-yaml-builds/VSTS_build_YAMLdefinition.png&quot; alt=&quot;alt text&quot; title=&quot;Add default variables&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Under process you will be able to select the YAML file you’d like you use for this build definition.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/working-with-vsts-yaml-builds/VSTS_build_selectYAMLfile.png&quot; alt=&quot;alt text&quot; title=&quot;Add default variables&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;I hope this gives a clear way to start working with these new builds. if however you are missing anything leave a comment below and I’ll see what I can do.&lt;/p&gt;
+
+&lt;h2 id=&quot;whats-next&quot;&gt;Whats next?&lt;/h2&gt;
+&lt;p&gt;As you may know the tasks system that VSTS uses to facilitate build is also used to setup release, however the VSTS team decided to initially only support this feature on the build system. Presumably to give them the time to get this stable before moving further. As stated above there are still some things that might need some TLC before this gets out of preview.
+However it is a great idea that this functionality will cover releases in the future, as this will allow for maintaining the entire cycle (Build/Release/Infrastructure) from the codebase.&lt;/p&gt;
+
+&lt;h3 id=&quot;sources&quot;&gt;Sources&lt;/h3&gt;
+&lt;p&gt;If you want to get into this subject some more, the links below should get in handy.&lt;/p&gt;
+
+&lt;p&gt;https://github.com/Microsoft/vsts-agent/blob/master/docs/preview/yamlgettingstarted-scripts.md&lt;/p&gt;
+
+&lt;p&gt;https://docs.microsoft.com/en-us/vsts/build-release/actions/build-yaml&lt;/p&gt;
+</description>
+        <pubDate>Wed, 13 Dec 2017 20:05:23 +0000</pubDate>
+        <link>/blog/working-with-vsts-yaml-builds/</link>
+        <guid isPermaLink="true">/blog/working-with-vsts-yaml-builds/</guid>
+      </item>
+    
+      <item>
+        <title>Microsoft Connect(); 2017 Devops Announcements</title>
+        <description>&lt;p&gt;Some real interesting announcements are coming from Connect(); 2017.  This article will focus on some of the interesting DevOps announcement that just got out.&lt;/p&gt;
+
+&lt;h2 id=&quot;azure-devops-projects&quot;&gt;Azure DevOps Projects&lt;/h2&gt;
+
+&lt;p&gt;This allows you to create a full CI/CD pipeline from scratch using various sample applications, or just use your own code.&lt;/p&gt;
+
+&lt;p&gt;Currently DevOps project support sample project in the following languages:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;.NET Framework&lt;/li&gt;
+  &lt;li&gt;.NET Core&lt;/li&gt;
+  &lt;li&gt;Java&lt;/li&gt;
+  &lt;li&gt;Node.js&lt;/li&gt;
+  &lt;li&gt;PHP&lt;/li&gt;
+  &lt;li&gt;Python&lt;/li&gt;
+  &lt;li&gt;Static Html&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;If you don’t feel like using the provided sample projects you can just point to your own Git repo and setup the pipeline using that.&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/ms-connect-2017-devops-announcements/azure_devops_projects.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;Once you work your way through the wizard, you will be able to create a new VSTS account or use an existing one, once you’ve done this you get the following:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;GIT repo (with the code you requested)&lt;/li&gt;
+  &lt;li&gt;CI Build&lt;/li&gt;
+  &lt;li&gt;CI Release process&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;If that’s not enough you will actually end of with a running application using the CI pipeline you just created.&lt;/p&gt;
+
+&lt;p&gt;Off course these are pretty simple examples of a CI pipeline, this will however get you started really fast and also allow for a low impact introduction to Continuous Integration.&lt;/p&gt;
+
+&lt;p&gt;Make sure to check it out !&lt;/p&gt;
+
+&lt;p&gt;https://portal.azure.com/#create/Microsoft.AzureProject&lt;/p&gt;
+
+&lt;h2 id=&quot;pipeline-as-code&quot;&gt;Pipeline As Code&lt;/h2&gt;
+
+&lt;p&gt;You thought you were all DevOps because you are using Infrastructure As Code? Think again, Pipeline As Code is here!&lt;/p&gt;
+
+&lt;p&gt;VSTS now allows you to define your build Process in a YAML file and version it together with your code.&lt;/p&gt;
+
+&lt;p&gt;When creating a new Build simply select that it will be a YAML build and you can select the file from your repo. No need to configure any build logic in VSTS. Nor will you have to update your build definitions in VSTS when your build requirements change with the application.
+This will also allow you to create builds of older versions of your application without having to worry about any changes to the build process.&lt;/p&gt;
+
+&lt;p&gt;It’s also good to mention that these YAML files are simply a different representation of the existing process, so no new system and more importantly access to all the existing Tasks (incl. Marketplace extensions).&lt;/p&gt;
+
+&lt;p&gt;This feature doesn’t seem to be available of on the ring I’m on but it should show up as a preview feature soon, I’d encourage anyone to check it out!&lt;/p&gt;
+
+&lt;h2 id=&quot;release-gates&quot;&gt;Release gates&lt;/h2&gt;
+
+&lt;p&gt;Now we had validation steps between releases for a while, but the possibilities where limited. The newly released ‘Release Gates’ add new level of validating to the mix.&lt;/p&gt;
+
+&lt;p&gt;Release Gates, are automated tasks that can be used to validate either if a release should be deployed to an environment or validate if the deployment has executed correctly. Out-of-the-box you will have the following options available:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;/assets/img/posts/ms-connect-2017-devops-announcements/VSTS_Release_gates.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Azure Monitoring&lt;/strong&gt; &lt;br /&gt;
+  This option allows you to check on an Application Insights alerts being triggered, when they do happen after deployment your release will be stalled and eventually will fail if the issue if not resolved.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Invoke Azure Function&lt;/strong&gt; &lt;br /&gt;
+  This will allows you to extend this functionality by calling your very own Azure functions.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Invoke REST API&lt;/strong&gt; &lt;br /&gt;
+  Call a REST end-point to validate you release.
+  Publish To Azure Service Bus
+  Send a message into the Azure Service bus.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Query Work Items&lt;/strong&gt; &lt;br /&gt;
+  This type will allow you to check if a VSTS work item query returns any result and will stall the build if it does (i.e.. Don’t release while any Bugs are open)&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;As you can see above there is a lot of possibility to implement you own custom validation process and remove yet another piece of manual labor from your release pipeline. I’m interested in what people will get up with.&lt;/p&gt;
+
+&lt;p&gt;In short these are some pretty neat features that improve the way we can shape our DevOps process. I know this is only a short overview, but I hope this’ll get you started.&lt;/p&gt;
+</description>
+        <pubDate>Tue, 14 Nov 2017 20:05:23 +0000</pubDate>
+        <link>/blog/ms-connect-2017-devops-announcements/</link>
+        <guid isPermaLink="true">/blog/ms-connect-2017-devops-announcements/</guid>
+      </item>
+    
+
+    
+      
+        
+      
+    
+      
+    
+      
+        
+          <item>
+            <title></title>
+            <description>&lt;h3&gt;  {{ page.title }} &lt;/h3&gt;
+
+&lt;div id=&quot;categories&quot;&gt;
+{% for category in site.categories %}
+  &lt;div class=&quot;category-box&quot; &gt;
+    {% capture category_name %}{{ category | first }}{% endcapture %}
+    &lt;div id=&quot;#{{ category_name | slugize }}&quot;&gt;&lt;/div&gt;
+    &lt;h4 class=&quot;category-head&quot;&gt;&lt;a href=&quot;{{ site.baseurl }}/blog/categories/{{ category_name }}&quot;&gt;{{ category_name }}&lt;/a&gt;&lt;/h4&gt;
+    &lt;a name=&quot;{{ category_name | slugize }}&quot;&gt;&lt;/a&gt;
+     {% for post in site.categories[category_name] %}
+    &lt;article class=&quot;center&quot;&gt;
+      &lt;h6 &gt;&lt;a href=&quot;{{ site.baseurl }}{{ post.url }}&quot;&gt;{{post.title}}&lt;/a&gt;&lt;/h6&gt;
+    &lt;/article&gt;
+
+
+    {% endfor %}
+
+  &lt;/div&gt;
+{% endfor %}
+&lt;/div&gt;
+
+
+</description>
+            <link>/blog/categories/</link>
+          </item>
+        
+      
+    
+      
+        
+          <item>
+            <title></title>
+            <description>&lt;h3&gt;  {{ page.title }} &lt;/h3&gt;
+
+&lt;div id=&quot;categories&quot;&gt;
+{% for tag in site.tags %}
+  &lt;div class=&quot;category-box&quot; &gt;
+    {% capture tag_name %}{{ tag | first }}{% endcapture %}
+    &lt;div id=&quot;#{{ tag_name | slugize }}&quot;&gt;&lt;/div&gt;
+    &lt;h4 class=&quot;tag-head&quot;&gt;&lt;a href=&quot;{{ site.baseurl }}/blog/categories/{{ tag_name }}&quot;&gt;{{ tag_name }}&lt;/a&gt;&lt;/h4&gt;
+    &lt;a name=&quot;{{ tag_name | slugize }}&quot;&gt;&lt;/a&gt;
+     {% for post in site.tags[tag_name] %}
+    &lt;article class=&quot;center&quot;&gt;
+      &lt;h6 &gt;&lt;a href=&quot;{{ site.baseurl }}{{ post.url }}&quot;&gt;{{post.title}}&lt;/a&gt;&lt;/h6&gt;
+    &lt;/article&gt;
+
+    {% endfor %}
+    
+  &lt;/div&gt;
+{% endfor %}
+&lt;/div&gt;
+
+
+</description>
+            <link>/blog/tags/</link>
+          </item>
+        
+      
+    
+      
+    
+      
+    
+      
+        
+          <item>
+            <title>Guides</title>
+            <description>&lt;h5&gt; Posts by Category : {{ page.title }} &lt;/h5&gt;
+
+&lt;div class=&quot;card&quot;&gt;
+{% for post in site.categories.guides %}
+ &lt;li class=&quot;category-posts&quot;&gt;&lt;span&gt;{{ post.date | date_to_string }}&lt;/span&gt; &amp;nbsp; &lt;a href=&quot;{{ post.url }}&quot;&gt;{{ post.title }}&lt;/a&gt;&lt;/li&gt;
+{% endfor %}
+&lt;/div&gt;</description>
+            <link>/blog/categories/guides/</link>
+          </item>
+        
+      
+    
+      
+    
+      
+    
+      
+        
+          <item>
+            <title>Jekyll</title>
+            <description>&lt;h5&gt; Posts by Category : {{ page.title }} &lt;/h5&gt;
+
+&lt;div class=&quot;card&quot;&gt;
+{% for post in site.categories.jekyll %}
+ &lt;li class=&quot;category-posts&quot;&gt;&lt;span&gt;{{ post.date | date_to_string }}&lt;/span&gt; &amp;nbsp; &lt;a href=&quot;{{ post.url }}&quot;&gt;{{ post.title }}&lt;/a&gt;&lt;/li&gt;
+{% endfor %}
+&lt;/div&gt;</description>
+            <link>/blog/categories/jekyll/</link>
+          </item>
+        
+      
+    
+      
+        
+          <item>
+            <title>Jekyll</title>
+            <description>&lt;h5&gt; Posts by Tag : {{ page.title }} &lt;/h5&gt;
+
+&lt;div class=&quot;card&quot;&gt;
+{% for post in site.tags.jekyll %}
+ &lt;li class=&quot;category-posts&quot;&gt;&lt;span&gt;{{ post.date | date_to_string }}&lt;/span&gt; &amp;nbsp; &lt;a href=&quot;{{ post.url }}&quot;&gt;{{ post.title }}&lt;/a&gt;&lt;/li&gt;
+{% endfor %}
+&lt;/div&gt;</description>
+            <link>/blog/tags/jekyll</link>
+          </item>
+        
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+
+  </channel>
+</rss>
