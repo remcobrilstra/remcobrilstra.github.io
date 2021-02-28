@@ -29,11 +29,11 @@ typewrite-text: Welcome to my little corner of the web
 # Experiences
 author_work_experiences:
             - company_name: Nederlandse Spoorwegen (Dutch Railways)
-              company_logo: companies/ns.jpg
+              company_logo: companies/NS.jpg
               company_url: https://ns.nl
               designation: Lead platform developer
               description: things
-              visibility: true
+              visibility: false
             - company_name: Macaw
               company_logo: companies/macaw.svg
               company_url: https://macaw.nl
