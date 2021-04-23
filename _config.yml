@@ -32,7 +32,7 @@ author_work_experiences:
               company_logo: companies/NS.jpg
               company_url: https://ns.nl
               designation: Lead platform developer
-              description: things
+              description: Developing a platform for smooth deployment, operation and integration of low-code applications on AKS
               visibility: true
             - company_name: Macaw
               company_logo: companies/macaw.svg
