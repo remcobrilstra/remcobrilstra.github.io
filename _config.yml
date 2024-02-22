@@ -20,7 +20,7 @@ urls:
 
 author_logo: profile.png
 author: Remco Brilstra
-author_bio: Hi, my name is Remco Brilstra and i do DevOps things
+author_bio: Hi, my name is Remco Brilstra, i work as a Product Architect at Heineken Global. I am passionate about technology and love to share my knowledge with the community. I am a big fan of low-code and natural language technologies.
 # author_email: "mail@sujaykundu.com"
 author_location: The Netherlands
 author_website_url: "https://www.remcobrilstra.com"
@@ -28,17 +28,29 @@ typewrite-text: Welcome to my little corner of the web
 
 # Experiences
 author_work_experiences:
+            - company_name: Heineken Global
+              company_logo: companies/heineken.png
+              company_url: https://www.theheinekencompany.com
+              designation: Product Architect
+              description: Working the positioning and direction of Low-code and natural language (LLM) technologies within Heineken.
+              visibility: true
+            - company_name: Nederlandse Spoorwegen (Dutch Railways)
+              company_logo: companies/NS.jpg
+              company_url: https://ns.nl
+              designation: Solution/Platform Architect
+              description: Working on the positioning of the low-code platform within the NS IT landscape, and the architecture of a future-proof platform for low-code applications.
+              visibility: true
             - company_name: Nederlandse Spoorwegen (Dutch Railways)
               company_logo: companies/NS.jpg
               company_url: https://ns.nl
               designation: Lead platform developer
-              description: Developing a platform for smooth deployment, operation and integration of low-code applications on AKS
+              description: Developing a platform for smooth deployment, operation and integration of low-code applications on AKS.
               visibility: true
             - company_name: Macaw
               company_logo: companies/macaw.svg
               company_url: https://macaw.nl
               designation: Technology Consultant
-              description: Helped customers improve their software development, by using fitting tools and processes
+              description: Helped customers improve their software development, by using fitting tools and processes.
               visibility: true
             - company_name: Macaw
               company_logo: companies/macaw.svg
